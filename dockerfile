@@ -1,31 +1,25 @@
-# Stage 1: Build React frontend
-FROM node:18 AS client-build
-
+# Stage 1: Build the React frontend
+FROM node:18-alpine AS frontend
 WORKDIR /app
-
-COPY client/package*.json ./client/
-RUN cd client && npm install
-
-COPY client ./client
-RUN cd client && npm run build
-
-# Stage 2: Build backend and copy frontend build
-FROM node:18
-
-WORKDIR /app
-
-# Install backend dependencies
-COPY package*.json ./
+COPY fe/package*.json ./
 RUN npm install
+COPY fe/ .
+RUN npm run build
 
-# Copy backend source
-COPY . .
+# Stage 2: Build the Python backend
+FROM python:3.10-slim
+WORKDIR /app
 
-# Copy React build from previous stage
-COPY --from=client-build /app/client/build ./client/build
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libsndfile1 \
+    && rm -rf /var/lib/apt/lists/*
 
-# Expose backend port
-EXPOSE 5000
+COPY be/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Start the backend
-CMD ["node", "index.js"]
+COPY be/ .
+COPY --from=frontend /app/dist ./fe/dist
+
+EXPOSE 8000
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
