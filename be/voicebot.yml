@@ -1,0 +1,21 @@
+name: voicebot
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      - torch==2.0.0
+      - torchaudio==2.0.1
+      - transformers==4.34.0
+      - soundfile
+      - pyaudio
+      - webrtcvad
+      - rx
+      - halo
+      - onnx
+      - onnxruntime
+      - wheel
+      - pyctcdecode
+      - https://github.com/kpu/kenlm/archive/master.zip
