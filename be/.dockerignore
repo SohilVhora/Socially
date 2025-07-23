@@ -1,9 +1,0 @@
-__pycache__/
-*.pyc
-*.pkl
-*.wav
-*.ipynb
-.env
-*.zip
-*.tar.gz
-.DS_Store
