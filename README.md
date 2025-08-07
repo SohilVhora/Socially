@@ -71,3 +71,15 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+
+## Backend dependency management
+
+The backend's requirements file (`be/requirements.txt`) now pins explicit versions for its core packages.
+To update these versions after modifying dependencies:
+
+```sh
+pip install -r be/requirements.txt
+pip freeze | grep -E '^(fastapi|uvicorn|transformers|torchaudio|torch|TTS)=' > be/requirements.txt
+```
+
+This process ensures that the recorded dependencies match the installed packages.
