@@ -1,8 +1,8 @@
 # Stage 1: Build the React frontend
 FROM node:18-alpine AS frontend
 WORKDIR /app
-COPY fe/package*.json ./
-RUN npm install
+COPY fe/package.json fe/package-lock.json ./
+RUN npm ci
 COPY fe/ .
 RUN npm run build
 
