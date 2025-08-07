@@ -33,14 +33,18 @@ const VoiceChatPage = () => {
     }
   }, [messages]);
 
+  // --- SCENARIO CHANGE: Updated with new social scenarios ---
   const scenarios = [
+    // Social & Personal Scenarios
+    { value: "first-date", label: "First Date Conversation" },
+    { value: "stranger-chat", label: "Practice Talking to a Stranger" },
+    { value: "lonely-consultant", label: "Supportive Consultant for Loneliness" },
+    { value: "anxiety-coach", label: "Anxiety & Depression Support Coach" },
+
+    // Original Professional Scenarios
     { value: "customer-service", label: "Customer Service Representative" },
     { value: "life-coach", label: "Life Coach & Mentor" },
     { value: "language-tutor", label: "Language Learning Tutor" },
-    { value: "technical-support", label: "Technical Support Specialist" },
-    { value: "therapist", label: "Virtual Therapist" },
-    { value: "business-advisor", label: "Business Advisor" },
-    { value: "creative-writer", label: "Creative Writing Partner" },
     { value: "interview-prep", label: "Interview Preparation Coach" }
   ];
 
@@ -130,7 +134,7 @@ const VoiceChatPage = () => {
               <p className="text-xl text-gray-300">Choose your scenario and voice preference to begin</p>
             </div>
             <div className="grid md:grid-cols-2 gap-8 mb-12">
-              {/* Scenario and Voice Selection Cards remain the same */}
+              {/* Scenario Card with updated list */}
               <Card className="bg-white/10 backdrop-blur-lg border-white/20">
                 <CardHeader>
                   <CardTitle className="text-white text-2xl">Select Scenario</CardTitle>
@@ -143,6 +147,7 @@ const VoiceChatPage = () => {
                   </Select>
                 </CardContent>
               </Card>
+              {/* Voice Selection Card */}
               <Card className="bg-white/10 backdrop-blur-lg border-white/20">
                 <CardHeader>
                   <CardTitle className="text-white text-2xl">Select Voice</CardTitle>
