@@ -5,6 +5,18 @@ import torch.nn.functional as F
 from torchaudio.transforms import Resample
 from transformers import Wav2Vec2Processor, Wav2Vec2ForSequenceClassification, Wav2Vec2ForCTC
 import time
+import os
+import argparse
+
+"""Live transcription with emotion detection.
+
+Usage:
+    python be/live_transcribe_emotion.py [--mic-index N] [--sample-rate HZ]
+
+Environment variables ``MIC_INDEX`` and ``MIC_SAMPLE_RATE`` can also set these
+values. Command-line arguments take precedence over environment variables,
+which override the defaults (index 4, sample rate 48000 Hz).
+"""
 
 # === Paths ===
 EMOTION_MODEL_PATH = "models/asr_model"
@@ -21,10 +33,36 @@ asr_model = Wav2Vec2ForCTC.from_pretrained(ASR_MODEL_NAME).eval()
 emotion_labels = ['neutral', 'calm', 'happy', 'sad', 'angry', 'fearful', 'disgust', 'surprised']
 
 # === Mic settings ===
-MIC_INDEX = 4            # your working mic device
-MIC_SAMPLE_RATE = 48000  # your hardware rate
+DEFAULT_MIC_INDEX = 4
+DEFAULT_MIC_SAMPLE_RATE = 48000
 MODEL_SAMPLE_RATE = 16000
 DURATION = 4             # seconds
+
+
+def parse_args():
+    env_index = int(os.getenv("MIC_INDEX", DEFAULT_MIC_INDEX))
+    env_rate = int(os.getenv("MIC_SAMPLE_RATE", DEFAULT_MIC_SAMPLE_RATE))
+    parser = argparse.ArgumentParser(
+        description="Real-time transcription with emotion detection"
+    )
+    parser.add_argument(
+        "--mic-index",
+        type=int,
+        default=env_index,
+        help="Microphone device index (or set MIC_INDEX env var)",
+    )
+    parser.add_argument(
+        "--sample-rate",
+        type=int,
+        default=env_rate,
+        help="Microphone sample rate in Hz (or set MIC_SAMPLE_RATE env var)",
+    )
+    return parser.parse_args()
+
+
+args = parse_args()
+MIC_INDEX = args.mic_index
+MIC_SAMPLE_RATE = args.sample_rate
 
 resampler = Resample(orig_freq=MIC_SAMPLE_RATE, new_freq=MODEL_SAMPLE_RATE)
 
