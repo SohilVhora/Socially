@@ -10,9 +10,10 @@ def load_models(asr_model_path, emotion_model_path, device):
     asr_processor = AutoProcessor.from_pretrained(asr_model_name)
     asr_model = AutoModelForCTC.from_pretrained(asr_model_name).to(device)
 
-    emotion_model_path = "app/models/emotion_model"
     emotion_tokenizer = AutoTokenizer.from_pretrained(emotion_model_path, local_files_only=True)
-    emotion_model = AutoModelForSequenceClassification.from_pretrained(emotion_model_path, local_files_only=True).to(device)
+    emotion_model = AutoModelForSequenceClassification.from_pretrained(
+        emotion_model_path, local_files_only=True
+    ).to(device)
     id2label = emotion_model.config.id2label
 
     return asr_processor, asr_model, emotion_tokenizer, emotion_model, id2label
