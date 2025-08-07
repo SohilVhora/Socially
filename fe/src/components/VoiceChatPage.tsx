@@ -1,4 +1,3 @@
-
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,15 +6,32 @@ import { Phone, PhoneOff, Mic, MicOff } from "lucide-react";
 import { Link } from "react-router-dom";
 import CallAnimation from "./CallAnimation";
 
+// NEW: Define a type for our chat messages for better code quality
+type Message = {
+  text: string;
+  sender: 'user' | 'ai';
+  emotion?: string; // Optional: store the user's emotion with their message
+};
+
 const VoiceChatPage = () => {
   const [selectedScenario, setSelectedScenario] = useState("");
   const [selectedVoice, setSelectedVoice] = useState("");
   const [isCallActive, setIsCallActive] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
-  const [transcript, setTranscript] = useState("");
-  const [emotion, setEmotion] = useState("");
+  
+  // --- STATE CHANGE: Replaced transcript and emotion with a messages array ---
+  const [messages, setMessages] = useState<Message[]>([]);
+  
   const wsRef = useRef<WebSocket | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null); // Ref for scrolling
+
+  // --- Scroll to bottom of chat when new messages are added ---
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [messages]);
 
   const scenarios = [
     { value: "customer-service", label: "Customer Service Representative" },
@@ -40,13 +56,23 @@ const VoiceChatPage = () => {
   const handleStartCall = async () => {
     if (!selectedScenario || !selectedVoice) return;
 
+    // Reset message history for new call
+    setMessages([]);
+
     const ws = new WebSocket("ws://localhost:8000/ws");
     wsRef.current = ws;
 
+    // --- WEBSOCKET LOGIC CHANGE: Handle both user and AI messages ---
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      setTranscript(data.text);
-      setEmotion(data.emotion);
+
+      if (data.text && data.emotion) {
+        const userMessage: Message = { text: data.text, sender: 'user', emotion: data.emotion };
+        setMessages((prev) => [...prev, userMessage]);
+      } else if (data.ai_response) {
+        const aiMessage: Message = { text: data.ai_response, sender: 'ai' };
+        setMessages((prev) => [...prev, aiMessage]);
+      }
     };
 
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -55,44 +81,39 @@ const VoiceChatPage = () => {
 
     mediaRecorder.ondataavailable = (e) => {
       if (e.data.size > 0 && ws.readyState === 1) {
-        e.data.arrayBuffer().then(buffer => ws.send(buffer));
+        e.data.arrayBuffer().then(buffer => {
+          if (!isMuted) {
+            ws.send(buffer)
+          }
+        });
       }
     };
-
+    
     mediaRecorder.start(250);
     setIsCallActive(true);
   };
 
   const handleEndCall = () => {
-  setIsCallActive(false);
-  setIsMuted(false);
-
-  // Stop recording
-  mediaRecorderRef.current?.stop();
-
-  // Stop microphone stream
-  if (mediaRecorderRef.current?.stream) {
-    mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
-  }
-
-  // Close WebSocket
-  wsRef.current?.close();
-
-  // Clear refs
-  mediaRecorderRef.current = null;
-  wsRef.current = null;
-};
-
+    setIsCallActive(false);
+    setIsMuted(false);
+    mediaRecorderRef.current?.stop();
+    if (mediaRecorderRef.current?.stream) {
+      mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
+    }
+    wsRef.current?.close();
+    mediaRecorderRef.current = null;
+    wsRef.current = null;
+  };
 
   const toggleMute = () => {
     setIsMuted(!isMuted);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900">
+    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 text-white">
       <nav className="p-6 flex justify-between items-center">
         <Link to="/">
-          <h1 className="text-2xl font-bold text-white hover:text-cyan-400 transition-colors">VoiceAI</h1>
+          <h1 className="text-2xl font-bold hover:text-cyan-400 transition-colors">VoiceAI</h1>
         </Link>
         <Link to="/">
           <Button variant="outline" className="text-white border-white hover:bg-white hover:text-purple-900">
@@ -105,135 +126,84 @@ const VoiceChatPage = () => {
         {!isCallActive ? (
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-12">
-              <h1 className="text-4xl font-bold text-white mb-4">
-                Start Your AI Conversation
-              </h1>
-              <p className="text-xl text-gray-300">
-                Choose your scenario and voice preference to begin
-              </p>
+              <h1 className="text-4xl font-bold mb-4">Start Your AI Conversation</h1>
+              <p className="text-xl text-gray-300">Choose your scenario and voice preference to begin</p>
             </div>
-
             <div className="grid md:grid-cols-2 gap-8 mb-12">
+              {/* Scenario and Voice Selection Cards remain the same */}
               <Card className="bg-white/10 backdrop-blur-lg border-white/20">
                 <CardHeader>
                   <CardTitle className="text-white text-2xl">Select Scenario</CardTitle>
-                  <CardDescription className="text-gray-300">
-                    Choose the type of conversation you'd like to have
-                  </CardDescription>
+                  <CardDescription className="text-gray-300">Choose the type of conversation you'd like to have</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Select value={selectedScenario} onValueChange={setSelectedScenario}>
-                    <SelectTrigger className="bg-white/10 border-white/30 text-white">
-                      <SelectValue placeholder="Choose a scenario..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {scenarios.map((scenario) => (
-                        <SelectItem key={scenario.value} value={scenario.value}>
-                          {scenario.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
+                    <SelectTrigger className="bg-white/10 border-white/30 text-white"><SelectValue placeholder="Choose a scenario..." /></SelectTrigger>
+                    <SelectContent>{scenarios.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </CardContent>
               </Card>
-
               <Card className="bg-white/10 backdrop-blur-lg border-white/20">
                 <CardHeader>
                   <CardTitle className="text-white text-2xl">Select Voice</CardTitle>
-                  <CardDescription className="text-gray-300">
-                    Choose your preferred AI voice personality
-                  </CardDescription>
+                  <CardDescription className="text-gray-300">Choose your preferred AI voice personality</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Select value={selectedVoice} onValueChange={setSelectedVoice}>
-                    <SelectTrigger className="bg-white/10 border-white/30 text-white">
-                      <SelectValue placeholder="Choose a voice..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {voices.map((voice) => (
-                        <SelectItem key={voice.value} value={voice.value}>
-                          {voice.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
+                    <SelectTrigger className="bg-white/10 border-white/30 text-white"><SelectValue placeholder="Choose a voice..." /></SelectTrigger>
+                    <SelectContent>{voices.map((v) => <SelectItem key={v.value} value={v.value}>{v.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </CardContent>
               </Card>
             </div>
-
             <div className="text-center">
-              <Button
-                size="lg"
-                onClick={handleStartCall}
-                disabled={!selectedScenario || !selectedVoice}
-                className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white px-12 py-6 text-xl rounded-full transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-              >
+              <Button size="lg" onClick={handleStartCall} disabled={!selectedScenario || !selectedVoice} className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white px-12 py-6 text-xl rounded-full transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100">
                 <Phone className="w-6 h-6 mr-3" />
                 Start Conversation
               </Button>
-              {(!selectedScenario || !selectedVoice) && (
-                <p className="text-yellow-300 mt-4">
-                  Please select both a scenario and voice to continue
-                </p>
-              )}
+              {(!selectedScenario || !selectedVoice) && (<p className="text-yellow-300 mt-4">Please select both a scenario and voice to continue</p>)}
             </div>
           </div>
         ) : (
-          <div className="max-w-4xl mx-auto">
-            <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold text-white mb-2">Call in Progress</h1>
-              <p className="text-gray-300">
-                {scenarios.find(s => s.value === selectedScenario)?.label} • {voices.find(v => v.value === selectedVoice)?.label}
-              </p>
+          // --- UI CHANGE: In-call view now shows a chat history ---
+          <div className="max-w-4xl mx-auto flex flex-col h-[calc(100vh-150px)]">
+            <div className="text-center mb-4">
+              <h1 className="text-3xl font-bold mb-2">Call in Progress</h1>
+              <p className="text-gray-300">{scenarios.find(s => s.value === selectedScenario)?.label}</p>
             </div>
 
-            <CallAnimation />
+            {/* NEW: Chat history display */}
+            <div ref={chatContainerRef} className="flex-grow p-4 mb-4 overflow-y-auto bg-black/20 rounded-lg shadow-inner space-y-4">
+              {messages.map((msg, index) => (
+                <div key={index} className={`flex items-end gap-2 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  {msg.sender === 'ai' && <div className="w-8 h-8 rounded-full bg-purple-500 flex-shrink-0"></div>}
+                  <div className={`max-w-xs md:max-w-md lg:max-w-lg px-4 py-2 rounded-xl shadow ${msg.sender === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800'}`}>
+                    <p>{msg.text}</p>
+                    {msg.sender === 'user' && msg.emotion && (
+                      <p className="text-xs text-blue-200 mt-1 capitalize">{msg.emotion}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+               {messages.length === 0 && (
+                 <div className="text-center text-gray-400">
+                   <p>You're connected! Start speaking to see the conversation here.</p>
+                 </div>
+               )}
+            </div>
 
-            <div className="text-center mb-8">
-              <div className="inline-flex items-center bg-green-500/20 text-green-300 px-6 py-3 rounded-full">
-                <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse mr-3"></div>
-                Connected and Ready
+            {/* Call controls */}
+            <div className="flex-shrink-0">
+              <div className="flex justify-center space-x-6">
+                <Button variant="outline" size="lg" onClick={toggleMute} className={`${isMuted ? 'bg-red-500/20 border-red-500 text-red-300 hover:bg-red-500/30' : 'bg-white/10 border-white/30 text-white hover:bg-white/20'} px-8 py-4 rounded-full transition-all duration-300`}>
+                  {isMuted ? <MicOff className="w-6 h-6 mr-2" /> : <Mic className="w-6 h-6 mr-2" />}
+                  {isMuted ? 'Unmute' : 'Mute'}
+                </Button>
+                <Button size="lg" onClick={handleEndCall} className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-8 py-4 rounded-full transition-all duration-300 hover:scale-105">
+                  <PhoneOff className="w-6 h-6 mr-2" />
+                  End Call
+                </Button>
               </div>
-            </div>
-
-            <div className="flex justify-center space-x-6">
-              <Button
-                variant="outline"
-                size="lg"
-                onClick={toggleMute}
-                className={`${isMuted 
-                  ? 'bg-red-500/20 border-red-500 text-red-300 hover:bg-red-500/30' 
-                  : 'bg-white/10 border-white/30 text-white hover:bg-white/20'} px-8 py-4 rounded-full transition-all duration-300`}
-              >
-                {isMuted ? <MicOff className="w-6 h-6 mr-2" /> : <Mic className="w-6 h-6 mr-2" />}
-                {isMuted ? 'Unmute' : 'Mute'}
-              </Button>
-              <Button
-                size="lg"
-                onClick={handleEndCall}
-                className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-8 py-4 rounded-full transition-all duration-300 hover:scale-105"
-              >
-                <PhoneOff className="w-6 h-6 mr-2" />
-                End Call
-              </Button>
-            </div>
-
-            <div className="mt-12 text-center">
-              <Card className="bg-white/10 backdrop-blur-lg border-white/20 max-w-2xl mx-auto">
-                <CardContent className="p-6">
-                  <p className="text-gray-300 text-lg">
-                    You're now connected! Start speaking and the AI will respond naturally.
-                    Use the mute button if you need a moment, or end the call when you're finished.
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="text-center mt-8">
-              <h2 className="text-xl text-white font-bold">Live Transcript:</h2>
-              <p className="text-lg text-white mt-2">{transcript || "---"}</p>
-              <h2 className="text-xl text-white font-bold mt-6">Detected Emotion:</h2>
-              <p className="text-lg text-pink-300 mt-2">{emotion || "---"}</p>
             </div>
           </div>
         )}
