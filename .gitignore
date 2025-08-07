@@ -7,6 +7,18 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Environment variables
+# Ignore the specific .env file in the backend directory
+be/.env
+.envrc
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Node.js
 node_modules
 dist
 dist-ssr
@@ -22,6 +34,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Python
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -51,8 +65,8 @@ share/python-wheels/
 MANIFEST
 
 # PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+# Usually these files are written by a python script from a template
+# before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
 
@@ -141,7 +155,9 @@ ipython_config.py
 .pdm-python
 .pdm-build/
 
+# Large files and models
 *.safetensors
+be/app/models/TinyLlama/
 
 # pixi
 #   Similar to Pipfile.lock, it is generally recommended to include pixi.lock in version control.
@@ -159,16 +175,6 @@ celerybeat.pid
 
 # SageMath parsed files
 *.sage.py
-
-# Environments
-.env
-.envrc
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
 
 # Spyder project settings
 .spyderproject
@@ -208,9 +214,9 @@ cython_debug/
 .abstra/
 
 # Visual Studio Code
-#  Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore 
+#  Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore
 #  that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
-#  and can be added to the global gitignore or merged into this file. However, if you prefer, 
+#  and can be added to the global gitignore or merged into this file. However, if you prefer,
 #  you could uncomment the following to ignore the entire vscode folder
 # .vscode/
 
@@ -226,4 +232,4 @@ marimo/_lsp/
 __marimo__/
 
 # Streamlit
-.streamlit/secrets.tomlbe/app/models/TinyLlama/
+.streamlit/secrets.toml
