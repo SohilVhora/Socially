@@ -2,22 +2,65 @@ import torch
 import numpy as np
 import webrtcvad
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from transformers import Wav2Vec2Processor, Wav2Vec2ForCTC, Wav2Vec2ForSequenceClassification
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    Wav2Vec2ForCTC,
+    Wav2Vec2ForSequenceClassification,
+    Wav2Vec2Processor,
+)
 from torch.nn.functional import softmax
 
 app = FastAPI()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# ====== Load Models ======
-asr_processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base-960h")
-asr_model = Wav2Vec2ForCTC.from_pretrained("facebook/wav2vec2-base-960h").to(device).eval()
+# ====== Deferred Model Loading ======
+asr_processor = None
+asr_model = None
+emotion_model = None
+id2label = None
+llm_tokenizer = None
+llm_model = None
 
-emotion_model = Wav2Vec2ForSequenceClassification.from_pretrained(
-    "app/models/emotion_model",
-    local_files_only=True
-).to(device).eval()
 
-id2label = emotion_model.config.id2label
+def init_models() -> None:
+    """Load heavy models on first use."""
+    global asr_processor, asr_model, emotion_model, id2label, llm_tokenizer, llm_model
+    if asr_model is None:
+        asr_processor = Wav2Vec2Processor.from_pretrained(
+            "facebook/wav2vec2-base-960h"
+        )
+        asr_model = (
+            Wav2Vec2ForCTC.from_pretrained("facebook/wav2vec2-base-960h")
+            .to(device)
+            .eval()
+        )
+
+        emotion_model = (
+            Wav2Vec2ForSequenceClassification.from_pretrained(
+                "app/models/emotion_model", local_files_only=True
+            )
+            .to(device)
+            .eval()
+        )
+        id2label = emotion_model.config.id2label
+
+        token = "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"
+        llm_tokenizer = AutoTokenizer.from_pretrained(
+            "deepseek-ai/deepseek-llm-1.3b-base",
+            use_auth_token=token,
+            trust_remote_code=True,
+        )
+        llm_model = (
+            AutoModelForCausalLM.from_pretrained(
+                "deepseek-ai/deepseek-llm-1.3b-base",
+                use_auth_token=token,
+                device_map="auto",
+                trust_remote_code=True,
+            )
+            .eval()
+        )
+        print("Models initialized and ready.")
 
 # ====== Initialize VAD ======
 vad = webrtcvad.Vad(2)  # Aggressiveness: 0 (least) to 3 (most)
@@ -28,26 +71,10 @@ min_speech_frames = 5
 silence_timeout = 20
 
 
-from transformers import AutoTokenizer, AutoModelForCausalLM
-
-token = "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"
-
-llm_tokenizer = AutoTokenizer.from_pretrained(
-    "deepseek-ai/deepseek-llm-1.3b-base", 
-    use_auth_token=token, 
-    trust_remote_code=True
-)
-
-llm_model = AutoModelForCausalLM.from_pretrained(
-    "deepseek-ai/deepseek-llm-1.3b-base", 
-    use_auth_token=token, 
-    device_map="auto", 
-    trust_remote_code=True
-).eval()
-
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
+    init_models()
     buffer = b""
     speech_started = False
     silence_counter = 0
