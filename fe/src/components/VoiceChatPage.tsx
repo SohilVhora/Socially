@@ -18,9 +18,10 @@ const VoiceChatPage = () => {
   const [selectedVoice, setSelectedVoice] = useState("");
   const [isCallActive, setIsCallActive] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
-  
+
   // --- STATE CHANGE: Replaced transcript and emotion with a messages array ---
   const [messages, setMessages] = useState<Message[]>([]);
+  const [error, setError] = useState<string | null>(null);
   
   const wsRef = useRef<WebSocket | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -60,41 +61,57 @@ const VoiceChatPage = () => {
   const handleStartCall = async () => {
     if (!selectedScenario || !selectedVoice) return;
 
-    // Reset message history for new call
+    // Reset message history and errors for new call
     setMessages([]);
+    setError(null);
 
-    const ws = new WebSocket("ws://localhost:8000/ws");
-    wsRef.current = ws;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-    // --- WEBSOCKET LOGIC CHANGE: Handle both user and AI messages ---
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+      const ws = new WebSocket("ws://localhost:8000/ws");
+      wsRef.current = ws;
 
-      if (data.text && data.emotion) {
-        const userMessage: Message = { text: data.text, sender: 'user', emotion: data.emotion };
-        setMessages((prev) => [...prev, userMessage]);
-      } else if (data.ai_response) {
-        const aiMessage: Message = { text: data.ai_response, sender: 'ai' };
-        setMessages((prev) => [...prev, aiMessage]);
+      // --- WEBSOCKET LOGIC CHANGE: Handle both user and AI messages ---
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+
+        if (data.text && data.emotion) {
+          const userMessage: Message = { text: data.text, sender: 'user', emotion: data.emotion };
+          setMessages((prev) => [...prev, userMessage]);
+        } else if (data.ai_response) {
+          const aiMessage: Message = { text: data.ai_response, sender: 'ai' };
+          setMessages((prev) => [...prev, aiMessage]);
+        }
+      };
+
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0 && ws.readyState === 1) {
+          e.data.arrayBuffer().then(buffer => {
+            if (!isMuted) {
+              ws.send(buffer);
+            }
+          });
+        }
+      };
+
+      mediaRecorder.start(250);
+      setIsCallActive(true);
+    } catch (err) {
+      console.error("Error accessing microphone", err);
+      const message = err instanceof DOMException && err.name === "NotAllowedError"
+        ? "Microphone access was denied. Please allow access and try again."
+        : "Failed to access microphone. Please check your device settings and try again.";
+      setError(message);
+      if (mediaRecorderRef.current?.stream) {
+        mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
       }
-    };
-
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
-    mediaRecorderRef.current = mediaRecorder;
-
-    mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0 && ws.readyState === 1) {
-        e.data.arrayBuffer().then(buffer => {
-          if (!isMuted) {
-            ws.send(buffer)
-          }
-        });
-      }
-    };
-    
-    mediaRecorder.start(250);
-    setIsCallActive(true);
+      mediaRecorderRef.current = null;
+      wsRef.current?.close();
+      wsRef.current = null;
+    }
   };
 
   const handleEndCall = () => {
@@ -167,6 +184,7 @@ const VoiceChatPage = () => {
                 Start Conversation
               </Button>
               {(!selectedScenario || !selectedVoice) && (<p className="text-yellow-300 mt-4">Please select both a scenario and voice to continue</p>)}
+              {error && (<p className="text-red-400 mt-4">{error}</p>)}
             </div>
           </div>
         ) : (
