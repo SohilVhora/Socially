@@ -57,6 +57,17 @@ const VoiceChatPage = () => {
     { value: "male-calm", label: "Male - Calm" }
   ];
 
+  const cleanup = () => {
+    setIsCallActive(false);
+    setIsMuted(false);
+    mediaRecorderRef.current?.stop();
+    mediaRecorderRef.current?.stream
+      .getTracks()
+      .forEach((track) => track.stop());
+    mediaRecorderRef.current = null;
+    wsRef.current = null;
+  };
+
   const handleStartCall = async () => {
     if (!selectedScenario || !selectedVoice) return;
 
@@ -79,6 +90,15 @@ const VoiceChatPage = () => {
       }
     };
 
+    ws.onerror = () => {
+      cleanup();
+      ws.close();
+    };
+
+    ws.onclose = () => {
+      cleanup();
+    };
+
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
     mediaRecorderRef.current = mediaRecorder;
@@ -98,15 +118,8 @@ const VoiceChatPage = () => {
   };
 
   const handleEndCall = () => {
-    setIsCallActive(false);
-    setIsMuted(false);
-    mediaRecorderRef.current?.stop();
-    if (mediaRecorderRef.current?.stream) {
-      mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
-    }
     wsRef.current?.close();
-    mediaRecorderRef.current = null;
-    wsRef.current = null;
+    cleanup();
   };
 
   const toggleMute = () => {
