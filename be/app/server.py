@@ -1,4 +1,5 @@
 import os
+import asyncio
 import torch
 import numpy as np
 import webrtcvad
@@ -78,6 +79,38 @@ def generate_llm_response(text: str, emotion: str) -> str:
     response = llm_tokenizer.decode(output_ids[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
     return response.strip()
 
+
+def transcribe_audio(audio_input: np.ndarray) -> str:
+    """Run speech-to-text transcription."""
+    inputs = asr_processor(audio_input, sampling_rate=sample_rate, return_tensors="pt", padding=True)
+    with torch.no_grad():
+        logits = asr_model(inputs.input_values.to(device)).logits
+        pred_ids = torch.argmax(logits, dim=-1)
+    return asr_processor.batch_decode(pred_ids)[0].strip()
+
+
+def analyze_emotion_audio(audio_input: np.ndarray) -> str:
+    """Detect the speaker's emotion."""
+    emo_input_tensor = torch.tensor(audio_input).unsqueeze(0).to(device)
+    with torch.no_grad():
+        emo_logits = emotion_model(emo_input_tensor).logits
+    probs = softmax(emo_logits, dim=1)
+    return id2label[torch.argmax(probs, dim=1).item()]
+
+
+async def process_audio_chunk(websocket: WebSocket, audio_input: np.ndarray) -> None:
+    """Handle ASR, emotion analysis and LLM generation in background threads."""
+    transcription_task = asyncio.to_thread(transcribe_audio, audio_input)
+    emotion_task = asyncio.to_thread(analyze_emotion_audio, audio_input)
+    transcription, emotion = await asyncio.gather(transcription_task, emotion_task)
+
+    await websocket.send_json({"text": transcription, "emotion": emotion})
+
+    ai_response = await asyncio.to_thread(generate_llm_response, transcription, emotion)
+    print(f"User (emotion: {emotion}): {transcription}")
+    print(f"AI Response: {ai_response}")
+    await websocket.send_json({"ai_response": ai_response})
+
 # ====== VAD Configuration ======
 vad = webrtcvad.Vad(2)
 sample_rate = 16000
@@ -113,30 +146,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     if silence_counter > silence_timeout_frames and len(buffer) > 0:
                         audio_input = np.frombuffer(buffer, dtype=np.int16).astype(np.float32) / 32768.0
 
-                        # 1. Transcribe user's speech
-                        inputs = asr_processor(audio_input, sampling_rate=sample_rate, return_tensors="pt", padding=True)
-                        with torch.no_grad():
-                            logits = asr_model(inputs.input_values.to(device)).logits
-                            pred_ids = torch.argmax(logits, dim=-1)
-                            transcription = asr_processor.batch_decode(pred_ids)[0].strip()
-
-                        # 2. Detect user's emotion
-                        emo_input_tensor = torch.tensor(audio_input).unsqueeze(0).to(device)
-                        with torch.no_grad():
-                            emo_logits = emotion_model(emo_input_tensor).logits
-                        probs = softmax(emo_logits, dim=1)
-                        emotion = id2label[torch.argmax(probs, dim=1).item()]
-                        
-                        # Send the transcription and emotion to the frontend
-                        await websocket.send_json({"text": transcription, "emotion": emotion})
-
-                        # 3. **NEW**: Generate a response from the LLM
-                        ai_response = generate_llm_response(transcription, emotion)
-                        print(f"User (emotion: {emotion}): {transcription}")
-                        print(f"AI Response: {ai_response}")
-
-                        # 4. **NEW**: Send the AI's response to the frontend
-                        await websocket.send_json({"ai_response": ai_response})
+                        asyncio.create_task(process_audio_chunk(websocket, audio_input))
 
                         # Reset buffer for the next utterance
                         buffer = b""
