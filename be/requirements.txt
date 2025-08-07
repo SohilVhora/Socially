@@ -5,4 +5,4 @@ transformers==4.55.0
 torchaudio==2.8.0
 torch==2.8.0
 TTS==0.22.0
-webrtcvad-wheels==2.0.10.post1
+webrtcvad-wheels==2.0.11
