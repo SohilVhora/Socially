@@ -74,7 +74,9 @@ const VoiceChatPage = () => {
     // Reset message history for new call
     setMessages([]);
 
-    const ws = new WebSocket("ws://localhost:8000/ws");
+    const defaultWsUrl = `${window.location.origin.replace(/^http/, "ws")}/ws`;
+    const wsUrl = import.meta.env.VITE_WS_URL || defaultWsUrl;
+    const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     // --- WEBSOCKET LOGIC CHANGE: Handle both user and AI messages ---
